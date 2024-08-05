@@ -7,6 +7,7 @@ from pathlib import Path
 
 import git
 from dotenv import load_dotenv
+from icecream import ic
 from prompt_toolkit.enums import EditingMode
 
 from aider import __version__, models, utils
@@ -54,7 +55,9 @@ def setup_git(git_root, io):
     repo = None
     if git_root:
         repo = git.Repo(git_root)
-    elif io.confirm_ask("No git repo found, create one to track GPT's changes (recommended)?"):
+    elif io.confirm_ask(
+        "No git repo found, create one to track GPT's changes (recommended)?"
+    ):
         git_root = str(Path.cwd().resolve())
         repo = git.Repo.init(git_root)
         io.tool_output("Git repository created in the current working directory.")
@@ -84,7 +87,9 @@ def setup_git(git_root, io):
             io.tool_error('Update git name with: git config user.name "Your Name"')
         if not user_email:
             git_config.set_value("user", "email", "you@example.com")
-            io.tool_error('Update git email with: git config user.email "you@example.com"')
+            io.tool_error(
+                'Update git email with: git config user.email "you@example.com"'
+            )
 
     return repo.working_tree_dir
 
@@ -250,6 +255,7 @@ def generate_search_path_list(default_fname, git_root, command_line_file):
 
 
 def register_models(git_root, model_settings_fname, io, verbose=False):
+    ic(model_settings_fname)
     model_settings_files = generate_search_path_list(
         ".aider.model.settings.yml", git_root, model_settings_fname
     )
@@ -295,7 +301,9 @@ def register_litellm_models(git_root, model_metadata_fname, io, verbose=False):
     )
 
     try:
-        model_metadata_files_loaded = models.register_litellm_models(model_metatdata_files)
+        model_metadata_files_loaded = models.register_litellm_models(
+            model_metatdata_files
+        )
         if len(model_metadata_files_loaded) > 0 and verbose:
             io.tool_output("Loaded model metadata from:")
             for model_metadata_file in model_metadata_files_loaded:
@@ -453,7 +461,9 @@ def main(argv=None, input=None, output=None, force_git_root=None, return_coder=F
         os.environ["OPENAI_ORGANIZATION"] = args.openai_organization_id
 
     register_models(git_root, args.model_settings_file, io, verbose=args.verbose)
-    register_litellm_models(git_root, args.model_metadata_file, io, verbose=args.verbose)
+    register_litellm_models(
+        git_root, args.model_metadata_file, io, verbose=args.verbose
+    )
 
     if not args.model:
         args.model = "gpt-4o"
@@ -576,7 +586,9 @@ def main(argv=None, input=None, output=None, force_git_root=None, return_coder=F
         args.pretty = False
         io.tool_output("VSCode terminal detected, pretty output has been disabled.")
 
-    io.tool_output('Use /help <question> for help, run "aider --help" to see cmd line args')
+    io.tool_output(
+        'Use /help <question> for help, run "aider --help" to see cmd line args'
+    )
 
     if git_root and Path.cwd().resolve() != Path(git_root).resolve():
         io.tool_error(

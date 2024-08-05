@@ -1,19 +1,31 @@
 import math
-import os
 import queue
+import sys
 import tempfile
 import time
 
-from aider.llm import litellm
+from prompt_toolkit.formatted_text import HTML
+from prompt_toolkit.shortcuts import prompt
+from prompt_toolkit.styles import Style
+
+# 定义样式字典
+style = Style.from_dict(
+    {
+        "magenta": "ansimagenta",
+        "red-on-magenta": "fg:ansired bg:ansimagenta",
+        "yellow": "ansiyellow",
+        "brightcyan": "ansibrightcyan",
+        "red": "ansired",
+    }
+)
 
 try:
     import soundfile as sf
 except (OSError, ModuleNotFoundError):
     sf = None
 
-from prompt_toolkit.shortcuts import prompt
 
-from .dump import dump  # noqa: F401
+recording = HTML("<ansired>  </ansired> ")
 
 
 class SoundDeviceError(Exception):
@@ -31,7 +43,6 @@ class Voice:
         if sf is None:
             raise SoundDeviceError
         try:
-            print("Initializing sound device...")
             import sounddevice as sd
 
             self.sd = sd
@@ -61,11 +72,21 @@ class Voice:
         else:
             cnt = int(self.pct * 10)
 
-        bar = "░" * cnt + "█" * (num - cnt)
+        # bar = "░" * cnt + "█" * (num - cnt)
+        bar = "󰹞" * cnt + "󰹟" * (num - cnt)
         bar = bar[:num]
 
         dur = time.time() - self.start_time
-        return f"Recording, press ENTER when done... {dur:.1f}sec {bar}"
+        # return f"{red_bold(' ')} press ↵ for done {dur:.1f}sec {bar}"
+        return HTML(
+            f"<ansired>  </ansired> "
+            f"<ansiyellow>  {dur:.1f} </ansiyellow> "
+            f"<ansibrightcyan>{bar}</ansibrightcyan> "
+            "<ansired> 󰌑 </ansired>"
+        )
+
+    def is_pipeline(self):
+        return not sys.stdout.isatty()
 
     def record_and_transcribe(self, history=None, language=None):
         try:
@@ -91,10 +112,25 @@ class Voice:
             with self.sd.InputStream(
                 samplerate=sample_rate, channels=1, callback=self.callback
             ):
-                prompt(self.get_prompt, refresh_interval=0.1)
+                if self.is_pipeline():
+                    print("Recording... Press Ctrl+C to stop.", file=sys.stderr)
+                    while True:
+                        time.sleep(0.1)
+                        dur = time.time() - self.start_time
+                        print(
+                            f"\rRecording duration: {dur:.1f} seconds",
+                            end="",
+                            file=sys.stderr,
+                        )
+                else:
+                    prompt(self.get_prompt, refresh_interval=0.1)
         except self.sd.PortAudioError as err:
-            print(err)
+            print(err, file=sys.stderr)
             return
+        except KeyboardInterrupt:
+            print("\nRecording stopped.", file=sys.stderr)
+
+        print("\nProcessing audio...", file=sys.stderr)
 
         with sf.SoundFile(
             filename, mode="x", samplerate=sample_rate, channels=1
@@ -104,17 +140,10 @@ class Voice:
 
         from asr.groqs import do_asr
 
-        return do_asr(filename, prompt="中文普通话的输入", language="Chinese")
-        # with open(filename, "rb") as fh:
-        #    transcript = litellm.transcription(
-        #        model="whisper-1", file=fh, prompt=history, language=language
-        #    )
-        # text = transcript.text
-        # return text
+        res = do_asr(filename)
+        print("\nProcessing audio...", res, file=sys.stderr)
+        return res
 
 
 if __name__ == "__main__":
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise ValueError("Please set the OPENAI_API_KEY environment variable.")
     print(Voice().record_and_transcribe())
